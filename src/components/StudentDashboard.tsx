@@ -41,6 +41,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   user, onLogout, preselectedDate, preselectedSlot,
 }) => {
   const [view, setView] = useState<"home" | "book" | "queue" | "myAppointments" | "notifications">("home");
+  const [queueDate, setQueueDate] = useState<Date>(new Date());
   const [step, setStep] = useState(0);
   const [selectedService, setSelectedService] = useState("");
   const [isEmergency, setIsEmergency] = useState(false);
