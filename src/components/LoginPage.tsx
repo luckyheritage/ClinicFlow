@@ -62,12 +62,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1.5 block">
-                    {loginType === "student" ? "Matric Number" : "Admin ID"}
+                    {loginType === "student" ? "Matriculation Number" : "Admin ID"}
                   </label>
                   <Input
                     value={loginId}
                     onChange={(e) => setLoginId(e.target.value)}
-                    placeholder={loginType === "student" ? "e.g. CF001" : "e.g. ADMIN01"}
+                    placeholder={loginType === "student" ? "Enter your matriculation number" : "Enter your admin ID"}
                     className="h-12 text-base"
                     autoFocus
                   />
@@ -83,14 +83,11 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               </form>
 
               <p className="text-xs text-muted-foreground text-center mt-4">
-                {loginType === "student" ? "Enter your matric number (CF001 – CF020)" : "Enter your admin ID (ADMIN01 – ADMIN05)"}
+                {loginType === "student" ? "Enter your matriculation number to sign in" : "Enter your admin ID to sign in"}
               </p>
             </CardContent>
           </Card>
 
-          <p className="text-center text-primary-foreground/60 text-xs mt-6">
-            System can be extended to support SMS booking and notifications for non-smartphone users.
-          </p>
         </div>
       </div>
     </div>
