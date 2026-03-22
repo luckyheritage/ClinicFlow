@@ -255,6 +255,26 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       </div>
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => {
+                          const appt = getStoredAppointments().find((ap) => ap.id === a.id);
+                          if (appt) {
+                            const allAppts = getStoredAppointments();
+                            const updated = allAppts.map((ap) => (ap.id === a.id ? { ...ap, status: "rescheduled" as const } : ap));
+                            saveAppointments(updated);
+                            addNotification(user.id, `Appointment ${a.id} is being rescheduled.`, "rescheduled");
+                            setSelectedService(appt.service);
+                            setIsEmergency(appt.isEmergency);
+                            setComplaint(appt.complaint);
+                            setPhone(appt.phone || "");
+                            setEmail(appt.email || "");
+                            setSelectedDate(undefined);
+                            setSelectedSlot("");
+                            setStep(2);
+                            setView("book");
+                          }
+                        }}>
+                          Reschedule
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => {
                           handleCancel(a.id);
                         }}>
                           Cancel
