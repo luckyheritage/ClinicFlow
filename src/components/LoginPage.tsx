@@ -62,7 +62,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1.5 block">
-                    {loginType === "student" ? "Matric Number" : "Admin ID"}
+                    {loginType === "student" ? "Matriculation Number" : "Admin ID"}
                   </label>
                   <Input
                     value={loginId}
