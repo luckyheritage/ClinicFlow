@@ -3,6 +3,7 @@ import { AuthUser } from "@/lib/auth";
 import {
   Appointment, generateTimeSlots, generateBookingId, getStoredAppointments,
   saveAppointments, addNotification, services, isWeekday, formatDate,
+  getStoredNotifications, saveNotifications,
 } from "@/lib/data";
 import StepIndicator from "./StepIndicator";
 import Header from "./Header";
