@@ -83,7 +83,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               </form>
 
               <p className="text-xs text-muted-foreground text-center mt-4">
-                {loginType === "student" ? "Enter your matric number (CF001 – CF020)" : "Enter your admin ID (ADMIN01 – ADMIN05)"}
+                {loginType === "student" ? "Enter your matriculation number to sign in" : "Enter your admin ID to sign in"}
               </p>
             </CardContent>
           </Card>
