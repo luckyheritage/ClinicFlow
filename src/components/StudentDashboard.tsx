@@ -181,8 +181,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   // Notifications view
   if (view === "notifications") {
-    const { getStoredNotifications, saveNotifications } = require("@/lib/data");
-    const allNotifs = getStoredNotifications().filter((n: any) => n.userId === user.id);
+    const allNotifs = getStoredNotifications().filter((n) => n.userId === user.id);
     return (
       <div className="min-h-screen bg-background">
         <Header user={user} onLogout={onLogout} />
@@ -195,7 +194,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <p className="text-muted-foreground text-sm">No notifications yet.</p>
           ) : (
             <div className="space-y-3">
-              {allNotifs.map((n: any) => (
+              {allNotifs.map((n) => (
                 <Card key={n.id} className={cn("border-0 shadow-card", !n.read && "ring-2 ring-primary/20")}>
                   <CardContent className="p-4">
                     <p className="text-sm text-foreground">{n.message}</p>
@@ -209,7 +208,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
             variant="outline"
             className="mt-4"
             onClick={() => {
-              const notifs = getStoredNotifications().map((n: any) =>
+              const notifs = getStoredNotifications().map((n) =>
                 n.userId === user.id ? { ...n, read: true } : n
               );
               saveNotifications(notifs);
