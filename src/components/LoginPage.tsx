@@ -88,9 +88,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             </CardContent>
           </Card>
 
-          <p className="text-center text-primary-foreground/60 text-xs mt-6">
-            System can be extended to support SMS booking and notifications for non-smartphone users.
-          </p>
         </div>
       </div>
     </div>

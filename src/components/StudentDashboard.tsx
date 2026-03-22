@@ -468,7 +468,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     <Input value={`${user.firstName} ${user.lastName}`} disabled className="mt-1 bg-muted/50" />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">Matric No.</label>
+                    <label className="text-xs font-medium text-muted-foreground">Matriculation No.</label>
                     <Input value={user.id} disabled className="mt-1 bg-muted/50" />
                   </div>
                 </div>
