@@ -9,6 +9,14 @@ const Index = () => {
   const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
+    // Clear old data format on first load with new schema
+    const ver = localStorage.getItem("clinicflow_version");
+    if (ver !== "2") {
+      localStorage.removeItem("clinicflow_appointments");
+      localStorage.removeItem("clinicflow_notifications");
+      localStorage.removeItem("clinicflow_user");
+      localStorage.setItem("clinicflow_version", "2");
+    }
     seedDemoData();
     const stored = getStoredUser();
     if (stored) setUser(stored);

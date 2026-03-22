@@ -3,6 +3,7 @@ import { AuthUser } from "@/lib/auth";
 import { Bell, LogOut, Menu, X } from "lucide-react";
 import { getStoredNotifications } from "@/lib/data";
 import { cn } from "@/lib/utils";
+import ThemeToggle from "./ThemeToggle";
 
 interface HeaderProps {
   user: AuthUser | null;
@@ -22,7 +23,8 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout, onNotificationsClick })
           <p className="text-[10px] sm:text-xs opacity-80 font-medium">Book smart. Skip the wait.</p>
         </div>
         {user && (
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1 sm:gap-2">
+            <ThemeToggle />
             {onNotificationsClick && (
               <button onClick={onNotificationsClick} className="relative p-2 rounded-full hover:bg-primary-foreground/10 transition-colors">
                 <Bell className="w-5 h-5" />

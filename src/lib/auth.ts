@@ -1,4 +1,4 @@
-import { students, admins } from "./data";
+import { students, admins, AdminRole } from "./data";
 
 export type UserRole = "student" | "admin";
 
@@ -7,6 +7,8 @@ export interface AuthUser {
   firstName: string;
   lastName: string;
   role: UserRole;
+  adminRole?: AdminRole;
+  serviceId?: string;
 }
 
 export function authenticate(loginId: string): AuthUser | null {
@@ -19,7 +21,7 @@ export function authenticate(loginId: string): AuthUser | null {
 
   const admin = admins.find((a) => a.id === upper);
   if (admin) {
-    return { id: admin.id, firstName: admin.firstName, lastName: admin.lastName, role: "admin" };
+    return { id: admin.id, firstName: admin.firstName, lastName: admin.lastName, role: "admin", adminRole: admin.role, serviceId: admin.serviceId };
   }
 
   return null;

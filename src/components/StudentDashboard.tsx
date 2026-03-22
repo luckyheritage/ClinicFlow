@@ -3,14 +3,15 @@ import { AuthUser } from "@/lib/auth";
 import {
   Appointment, generateTimeSlots, generateBookingId, getStoredAppointments,
   saveAppointments, addNotification, services, isWeekday, formatDate,
-  getStoredNotifications, saveNotifications,
+  getStoredNotifications, saveNotifications, labSampleTypes,
+  assignClinician, getFullyBookedSlots,
 } from "@/lib/data";
 import StepIndicator from "./StepIndicator";
 import Header from "./Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   );
   const [selectedSlot, setSelectedSlot] = useState(preselectedSlot || "");
   const [complaint, setComplaint] = useState("");
+  const [selectedSampleType, setSelectedSampleType] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [confirmedAppointment, setConfirmedAppointment] = useState<Appointment | null>(null);
@@ -58,9 +60,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const appointments = getStoredAppointments();
   const dateStr = selectedDate ? format(selectedDate, "yyyy-MM-dd") : "";
 
+  const isLabService = selectedService === "Laboratory Services";
+
   const bookedSlotsForDate = useMemo(
-    () => appointments.filter((a) => a.date === dateStr && a.status === "confirmed").map((a) => a.timeSlot),
-    [appointments, dateStr]
+    () => selectedService ? getFullyBookedSlots(selectedService, dateStr) : [],
+    [appointments, dateStr, selectedService]
   );
 
   const recommendedSlot = useMemo(() => {
@@ -69,7 +73,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   const estimatedWait = useMemo(() => {
     const booked = bookedSlotsForDate.length;
-    return booked * 5; // rough estimate
+    return booked * 5;
   }, [bookedSlotsForDate]);
 
   const myAppointments = appointments.filter((a) => a.studentId === user.id && a.status === "confirmed");
@@ -81,6 +85,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     setSelectedDate(undefined);
     setSelectedSlot("");
     setComplaint("");
+    setSelectedSampleType("");
     setPhone("");
     setEmail("");
     setConfirmedAppointment(null);
@@ -89,6 +94,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const handleBook = () => {
     if (bookedSlotsForDate.includes(selectedSlot)) return;
 
+    const clinician = assignClinician(selectedService, dateStr);
+    const complaintText = isLabService && selectedSampleType
+      ? `${selectedSampleType}${complaint ? " - " + complaint : ""}`
+      : complaint;
+
     const appt: Appointment = {
       id: generateBookingId(),
       studentId: user.id,
@@ -96,19 +106,25 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
       date: dateStr,
       timeSlot: selectedSlot,
       service: selectedService,
-      complaint,
+      complaint: complaintText,
       phone,
       email,
       isEmergency,
       status: "confirmed",
+      assignedAdminId: clinician?.id || "",
+      assignedAdminName: clinician ? `${clinician.firstName} ${clinician.lastName}` : "Unassigned",
       createdAt: new Date().toISOString(),
     };
 
     const updated = [...appointments, appt];
     saveAppointments(updated);
-    addNotification(user.id, `Appointment confirmed for ${selectedSlot} on ${formatDate(dateStr)}. Please arrive 30 minutes early.`, "confirmation");
+    addNotification(user.id, `Appointment confirmed for ${selectedSlot} on ${formatDate(dateStr)} with ${appt.assignedAdminName}. Please arrive 30 minutes early.`, "confirmation");
+    if (clinician) {
+      addNotification(clinician.id, `New appointment: ${user.firstName} ${user.lastName} at ${selectedSlot} - ${selectedService}`, "confirmation");
+    }
     if (isEmergency) {
-      addNotification("ADMIN01", `🚨 Emergency: ${user.firstName} ${user.lastName} booked ${selectedSlot} - ${selectedService}`, "emergency");
+      // Notify all admins for the service
+      addNotification(clinician?.id || "ADMIN01", `🚨 Emergency: ${user.firstName} ${user.lastName} booked ${selectedSlot} - ${selectedService}`, "emergency");
     }
     setConfirmedAppointment(appt);
     setStep(4);
@@ -126,6 +142,36 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     setSelectedSlot(slot);
     setStep(0);
     setView("book");
+  };
+
+  const handleDownloadTicket = (appt: Appointment) => {
+    const ticket = `
+══════════════════════════════════════
+         CLINICFLOW - APPOINTMENT TICKET
+══════════════════════════════════════
+
+  Booking ID:    ${appt.id}
+  Name:          ${appt.studentName}
+  Matric No:     ${appt.studentId}
+  Date:          ${formatDate(appt.date)}
+  Time:          ${appt.timeSlot}
+  Service:       ${appt.service}
+  Clinician:     ${appt.assignedAdminName}
+  Status:        Confirmed
+  ${appt.isEmergency ? "Priority:      🚨 EMERGENCY\n" : ""}
+──────────────────────────────────────
+  Please arrive 30 minutes early.
+  Bring your student ID card.
+══════════════════════════════════════
+    `.trim();
+
+    const blob = new Blob([ticket], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ClinicFlow_Ticket_${appt.id}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // Home view
@@ -159,7 +205,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-foreground">View Queue</h3>
-                  <p className="text-xs text-muted-foreground">See today's schedule</p>
+                  <p className="text-xs text-muted-foreground">See schedule & availability</p>
                 </div>
               </CardContent>
             </Card>
@@ -247,13 +293,17 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         <p className="font-semibold text-foreground">{a.service}</p>
                         <p className="text-sm text-muted-foreground">{formatDate(a.date)} • {a.timeSlot}</p>
                         <p className="text-xs text-muted-foreground mt-1">ID: {a.id}</p>
+                        <p className="text-xs text-primary mt-1">Attending: {a.assignedAdminName}</p>
                         {a.isEmergency && (
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-emergency mt-1">
                             <AlertTriangle className="w-3 h-3" /> Emergency
                           </span>
                         )}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handleDownloadTicket(a)}>
+                          <Download className="w-3 h-3 mr-1" /> Ticket
+                        </Button>
                         <Button size="sm" variant="outline" onClick={() => {
                           const appt = getStoredAppointments().find((ap) => ap.id === a.id);
                           if (appt) {
@@ -274,9 +324,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         }}>
                           Reschedule
                         </Button>
-                        <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => {
-                          handleCancel(a.id);
-                        }}>
+                        <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => handleCancel(a.id)}>
                           Cancel
                         </Button>
                       </div>
@@ -336,24 +384,27 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {timeSlots.map((slot) => {
-              const appt = queueAppts.find((a) => a.timeSlot === slot);
-              const booked = !!appt;
+              const slotAppts = queueAppts.filter((a) => a.timeSlot === slot);
+              const hasBookings = slotAppts.length > 0;
               return (
                 <button
                   key={slot}
-                  onClick={() => !booked && handleBookFromQueue(queueDateStr, slot)}
-                  disabled={booked}
+                  onClick={() => !hasBookings && handleBookFromQueue(queueDateStr, slot)}
                   className={cn(
                     "p-3 rounded-xl text-left transition-all text-sm",
-                    booked
-                      ? "bg-destructive/10 border border-destructive/20 cursor-not-allowed"
+                    hasBookings
+                      ? "bg-destructive/10 border border-destructive/20 cursor-default"
                       : "bg-success/10 border border-success/20 hover:bg-success/20 cursor-pointer hover:shadow-card-md"
                   )}
                 >
-                  <p className={cn("font-semibold", booked ? "text-destructive" : "text-success")}>{slot}</p>
-                  <p className="text-xs mt-0.5 truncate">
-                    {booked ? appt!.studentName : "Available"}
-                  </p>
+                  <p className={cn("font-semibold", hasBookings ? "text-destructive" : "text-success")}>{slot}</p>
+                  {hasBookings ? (
+                    slotAppts.map((a) => (
+                      <p key={a.id} className="text-xs mt-0.5 truncate text-muted-foreground">{a.studentName}</p>
+                    ))
+                  ) : (
+                    <p className="text-xs mt-0.5 truncate text-muted-foreground">Available</p>
+                  )}
                 </button>
               );
             })}
@@ -416,7 +467,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </CardContent>
               </Card>
               <Card
-                className={cn("cursor-pointer border-0 shadow-card hover:shadow-card-md", !isEmergency && step === 1 && "")}
+                className="cursor-pointer border-0 shadow-card hover:shadow-card-md"
                 onClick={() => { setIsEmergency(false); setStep(2); }}
               >
                 <CardContent className="p-6 text-center">
@@ -518,16 +569,53 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <label className="text-xs font-medium text-muted-foreground">Service</label>
                   <Input value={selectedService} disabled className="mt-1 bg-muted/50" />
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Symptoms / Complaint *</label>
-                  <Textarea
-                    value={complaint}
-                    onChange={(e) => setComplaint(e.target.value)}
-                    placeholder="Describe your symptoms..."
-                    className="mt-1"
-                    rows={3}
-                  />
-                </div>
+
+                {/* Lab-specific: sample type selection */}
+                {isLabService ? (
+                  <>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Sample Type *</label>
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        {labSampleTypes.map((st) => (
+                          <button
+                            key={st}
+                            onClick={() => setSelectedSampleType(st)}
+                            className={cn(
+                              "py-2 px-3 rounded-lg text-sm font-medium border transition-all",
+                              selectedSampleType === st
+                                ? "gradient-primary text-primary-foreground border-transparent"
+                                : "bg-card text-foreground border-border hover:border-primary"
+                            )}
+                          >
+                            {st}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Additional Notes (optional)</label>
+                      <Textarea
+                        value={complaint}
+                        onChange={(e) => setComplaint(e.target.value)}
+                        placeholder="Any specific tests or information..."
+                        className="mt-1"
+                        rows={2}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Symptoms / Complaint *</label>
+                    <Textarea
+                      value={complaint}
+                      onChange={(e) => setComplaint(e.target.value)}
+                      placeholder="Describe your symptoms..."
+                      className="mt-1"
+                      rows={3}
+                    />
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Phone (optional)</label>
@@ -540,7 +628,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </div>
                 <Button
                   className="w-full gradient-primary hover:opacity-90"
-                  disabled={!complaint.trim()}
+                  disabled={isLabService ? !selectedSampleType : !complaint.trim()}
                   onClick={handleBook}
                 >
                   Confirm Booking
@@ -570,6 +658,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <div className="flex justify-between"><span className="text-sm text-muted-foreground">Date</span><span className="text-sm text-foreground">{formatDate(confirmedAppointment.date)}</span></div>
                 <div className="flex justify-between"><span className="text-sm text-muted-foreground">Time</span><span className="text-sm font-semibold text-foreground">{confirmedAppointment.timeSlot}</span></div>
                 <div className="flex justify-between"><span className="text-sm text-muted-foreground">Service</span><span className="text-sm text-foreground">{confirmedAppointment.service}</span></div>
+                <div className="flex justify-between"><span className="text-sm text-muted-foreground">Attending Clinician</span><span className="text-sm font-semibold text-primary">{confirmedAppointment.assignedAdminName}</span></div>
                 <div className="flex justify-between"><span className="text-sm text-muted-foreground">Status</span><span className="text-sm font-semibold text-success">Confirmed</span></div>
                 {confirmedAppointment.isEmergency && (
                   <div className="flex justify-between"><span className="text-sm text-muted-foreground">Priority</span><span className="text-sm font-semibold text-emergency">🚨 Emergency</span></div>
@@ -583,11 +672,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
+              <Button className="flex-1" variant="outline" onClick={() => handleDownloadTicket(confirmedAppointment)}>
+                <Download className="w-4 h-4 mr-2" /> Download Ticket
+              </Button>
               <Button className="flex-1 gradient-primary hover:opacity-90" onClick={() => { resetBooking(); setView("home"); }}>
                 Back to Home
-              </Button>
-              <Button variant="outline" className="flex-1" onClick={() => setView("myAppointments")}>
-                View My Appointments
               </Button>
             </div>
           </div>
