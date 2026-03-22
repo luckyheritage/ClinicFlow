@@ -67,7 +67,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   <Input
                     value={loginId}
                     onChange={(e) => setLoginId(e.target.value)}
-                    placeholder={loginType === "student" ? "e.g. CF001" : "e.g. ADMIN01"}
+                    placeholder={loginType === "student" ? "Enter your matriculation number" : "Enter your admin ID"}
                     className="h-12 text-base"
                     autoFocus
                   />
