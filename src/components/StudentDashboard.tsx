@@ -293,10 +293,14 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   // Queue view
   if (view === "queue") {
-    const today = new Date();
-    const todayStr = format(today, "yyyy-MM-dd");
-    const todayAppts = getStoredAppointments().filter((a) => a.date === todayStr && a.status === "confirmed");
-    const todayBooked = todayAppts.map((a) => a.timeSlot);
+    const queueDateStr = format(queueDate, "yyyy-MM-dd");
+    const queueAppts = getStoredAppointments().filter((a) => a.date === queueDateStr && a.status === "confirmed");
+
+    const shiftQueueDate = (days: number) => {
+      const d = new Date(queueDate);
+      d.setDate(d.getDate() + days);
+      setQueueDate(d);
+    };
 
     return (
       <div className="min-h-screen bg-background">
@@ -305,22 +309,39 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
           <Button variant="ghost" onClick={() => setView("home")} className="mb-4">
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
+
+          {/* Date navigator */}
+          <div className="flex items-center justify-between mb-4">
+            <Button variant="ghost" size="icon" onClick={() => shiftQueueDate(-1)}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="text-center">
+              <p className="font-bold text-foreground">{formatDate(queueDateStr)}</p>
+              <p className="text-xs text-muted-foreground">
+                {queueDateStr === format(new Date(), "yyyy-MM-dd") ? "Today" : ""}
+              </p>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => shiftQueueDate(1)}>
+              <ArrowRight className="w-5 h-5" />
+            </Button>
+          </div>
+
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-foreground">Today's Queue</h2>
+            <h2 className="text-xl font-bold text-foreground">Queue</h2>
             <div className="text-right">
-              <p className="text-sm font-semibold text-primary">Patients waiting: {todayAppts.length}</p>
-              <p className="text-xs text-muted-foreground">Avg wait: ~{todayAppts.length * 5} min</p>
+              <p className="text-sm font-semibold text-primary">Patients: {queueAppts.length}</p>
+              <p className="text-xs text-muted-foreground">Avg wait: ~{queueAppts.length * 5} min</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {timeSlots.map((slot) => {
-              const appt = todayAppts.find((a) => a.timeSlot === slot);
+              const appt = queueAppts.find((a) => a.timeSlot === slot);
               const booked = !!appt;
               return (
                 <button
                   key={slot}
-                  onClick={() => !booked && handleBookFromQueue(todayStr, slot)}
+                  onClick={() => !booked && handleBookFromQueue(queueDateStr, slot)}
                   disabled={booked}
                   className={cn(
                     "p-3 rounded-xl text-left transition-all text-sm",
