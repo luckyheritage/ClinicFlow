@@ -4,6 +4,7 @@ import {
   Appointment, generateTimeSlots, generateBookingId, getStoredAppointments,
   saveAppointments, addNotification, services, isWeekday, formatDate,
   getStoredNotifications, saveNotifications, labSampleTypes,
+  dentalVisitTypes, optometryVisitTypes, pharmacyVisitTypes, emergencyTypes,
   assignClinician, getFullyBookedSlots,
 } from "@/lib/data";
 import StepIndicator from "./StepIndicator";
@@ -37,6 +38,7 @@ interface StudentDashboardProps {
 }
 
 const STEPS = ["Service", "Emergency", "Time", "Details", "Confirm"];
+const EMERGENCY_STEPS = ["Service", "Emergency", "Triage", "Details", "Confirm"];
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({
   user, onLogout, preselectedDate, preselectedSlot,
@@ -52,6 +54,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [selectedSlot, setSelectedSlot] = useState(preselectedSlot || "");
   const [complaint, setComplaint] = useState("");
   const [selectedSampleType, setSelectedSampleType] = useState("");
+  const [selectedDentalType, setSelectedDentalType] = useState("");
+  const [selectedOptometryType, setSelectedOptometryType] = useState("");
+  const [selectedPharmacyType, setSelectedPharmacyType] = useState("");
+  const [pharmacyPrescription, setPharmacyPrescription] = useState("");
+  const [selectedEmergencyTypes, setSelectedEmergencyTypes] = useState<string[]>([]);
+  const [emergencyTemperature, setEmergencyTemperature] = useState("");
+  const [emergencyDescription, setEmergencyDescription] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [confirmedAppointment, setConfirmedAppointment] = useState<Appointment | null>(null);
@@ -61,6 +70,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const dateStr = selectedDate ? format(selectedDate, "yyyy-MM-dd") : "";
 
   const isLabService = selectedService === "Laboratory Services";
+  const isDentalService = selectedService === "Dental Services";
+  const isOptometryService = selectedService === "Optometry Services";
+  const isPharmacyService = selectedService === "Pharmacy";
 
   const bookedSlotsForDate = useMemo(
     () => selectedService ? getFullyBookedSlots(selectedService, dateStr) : [],
@@ -86,26 +98,71 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     setSelectedSlot("");
     setComplaint("");
     setSelectedSampleType("");
+    setSelectedDentalType("");
+    setSelectedOptometryType("");
+    setSelectedPharmacyType("");
+    setPharmacyPrescription("");
+    setSelectedEmergencyTypes([]);
+    setEmergencyTemperature("");
+    setEmergencyDescription("");
     setPhone("");
     setEmail("");
     setConfirmedAppointment(null);
   };
 
-  const handleBook = () => {
-    if (bookedSlotsForDate.includes(selectedSlot)) return;
+  const buildComplaintText = (): string => {
+    const parts: string[] = [];
 
-    const clinician = assignClinician(selectedService, dateStr);
-    const complaintText = isLabService && selectedSampleType
-      ? `${selectedSampleType}${complaint ? " - " + complaint : ""}`
-      : complaint;
+    if (isEmergency) {
+      if (selectedEmergencyTypes.length > 0) parts.push(`Emergency: ${selectedEmergencyTypes.join(", ")}`);
+      if (emergencyTemperature) parts.push(`Temperature: ${emergencyTemperature}°C`);
+      if (emergencyDescription) parts.push(emergencyDescription);
+    }
+
+    if (isLabService && selectedSampleType) {
+      parts.push(selectedSampleType);
+    } else if (isDentalService && selectedDentalType) {
+      parts.push(`Dental: ${selectedDentalType}`);
+    } else if (isOptometryService && selectedOptometryType) {
+      parts.push(`Optometry: ${selectedOptometryType}`);
+    } else if (isPharmacyService && selectedPharmacyType) {
+      parts.push(`Pharmacy: ${selectedPharmacyType}`);
+      if (pharmacyPrescription) parts.push(`Prescription: ${pharmacyPrescription}`);
+    }
+
+    if (complaint) parts.push(complaint);
+    return parts.join(" - ") || "No details provided";
+  };
+
+  const handleBook = () => {
+    let bookDate = dateStr;
+    let bookSlot = selectedSlot;
+
+    // For emergencies, auto-assign today and earliest slot if not selected
+    if (isEmergency) {
+      if (!bookDate) {
+        bookDate = format(new Date(), "yyyy-MM-dd");
+      }
+      if (!bookSlot) {
+        const svc = selectedService || "General Consultation";
+        const fullyBooked = getFullyBookedSlots(svc, bookDate);
+        bookSlot = timeSlots.find((s) => !fullyBooked.includes(s)) || timeSlots[0];
+      }
+    }
+
+    if (!isEmergency && bookedSlotsForDate.includes(bookSlot)) return;
+
+    const svc = selectedService || "General Consultation";
+    const clinician = assignClinician(svc, bookDate);
+    const complaintText = buildComplaintText();
 
     const appt: Appointment = {
       id: generateBookingId(),
       studentId: user.id,
       studentName: `${user.firstName} ${user.lastName}`,
-      date: dateStr,
-      timeSlot: selectedSlot,
-      service: selectedService,
+      date: bookDate,
+      timeSlot: bookSlot,
+      service: svc,
       complaint: complaintText,
       phone,
       email,
@@ -118,13 +175,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
     const updated = [...appointments, appt];
     saveAppointments(updated);
-    addNotification(user.id, `Appointment confirmed for ${selectedSlot} on ${formatDate(dateStr)} with ${appt.assignedAdminName}. Please arrive 30 minutes early.`, "confirmation");
+    addNotification(user.id, `Appointment confirmed for ${bookSlot} on ${formatDate(bookDate)} with ${appt.assignedAdminName}. Please arrive 30 minutes early.`, "confirmation");
     if (clinician) {
-      addNotification(clinician.id, `New appointment: ${user.firstName} ${user.lastName} at ${selectedSlot} - ${selectedService}`, "confirmation");
+      addNotification(clinician.id, `New appointment: ${user.firstName} ${user.lastName} at ${bookSlot} - ${svc}${isEmergency ? " 🚨 EMERGENCY" : ""}`, "confirmation");
     }
     if (isEmergency) {
-      // Notify all admins for the service
-      addNotification(clinician?.id || "ADMIN01", `🚨 Emergency: ${user.firstName} ${user.lastName} booked ${selectedSlot} - ${selectedService}`, "emergency");
+      addNotification(clinician?.id || "ADMIN01", `🚨 Emergency: ${user.firstName} ${user.lastName} - ${complaintText}`, "emergency");
     }
     setConfirmedAppointment(appt);
     setStep(4);
@@ -172,6 +228,159 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     a.download = `ClinicFlow_Ticket_${appt.id}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const toggleEmergencyType = (t: string) => {
+    setSelectedEmergencyTypes((prev) =>
+      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
+    );
+  };
+
+  // Render helper for service-specific fields
+  const renderServiceSpecificFields = () => {
+    if (isLabService) {
+      return (
+        <>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Sample Type *</label>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {labSampleTypes.map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setSelectedSampleType(st)}
+                  className={cn(
+                    "py-2 px-3 rounded-lg text-sm font-medium border transition-all",
+                    selectedSampleType === st
+                      ? "gradient-primary text-primary-foreground border-transparent"
+                      : "bg-card text-foreground border-border hover:border-primary"
+                  )}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Additional Notes (optional)</label>
+            <Textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} placeholder="Any specific tests or information..." className="mt-1" rows={2} />
+          </div>
+        </>
+      );
+    }
+
+    if (isDentalService) {
+      return (
+        <>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Reason for Visit *</label>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {dentalVisitTypes.map((dt) => (
+                <button
+                  key={dt}
+                  onClick={() => setSelectedDentalType(dt)}
+                  className={cn(
+                    "py-2 px-3 rounded-lg text-sm font-medium border transition-all",
+                    selectedDentalType === dt
+                      ? "gradient-primary text-primary-foreground border-transparent"
+                      : "bg-card text-foreground border-border hover:border-primary"
+                  )}
+                >
+                  {dt}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Additional Details (optional)</label>
+            <Textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} placeholder="Describe any pain, symptoms, or concerns..." className="mt-1" rows={2} />
+          </div>
+        </>
+      );
+    }
+
+    if (isOptometryService) {
+      return (
+        <>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Reason for Visit *</label>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {optometryVisitTypes.map((ot) => (
+                <button
+                  key={ot}
+                  onClick={() => setSelectedOptometryType(ot)}
+                  className={cn(
+                    "py-2 px-3 rounded-lg text-sm font-medium border transition-all",
+                    selectedOptometryType === ot
+                      ? "gradient-primary text-primary-foreground border-transparent"
+                      : "bg-card text-foreground border-border hover:border-primary"
+                  )}
+                >
+                  {ot}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Additional Details (optional)</label>
+            <Textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} placeholder="Describe any vision issues or concerns..." className="mt-1" rows={2} />
+          </div>
+        </>
+      );
+    }
+
+    if (isPharmacyService) {
+      return (
+        <>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Purpose of Visit *</label>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {pharmacyVisitTypes.map((pt) => (
+                <button
+                  key={pt}
+                  onClick={() => setSelectedPharmacyType(pt)}
+                  className={cn(
+                    "py-2 px-3 rounded-lg text-sm font-medium border transition-all",
+                    selectedPharmacyType === pt
+                      ? "gradient-primary text-primary-foreground border-transparent"
+                      : "bg-card text-foreground border-border hover:border-primary"
+                  )}
+                >
+                  {pt}
+                </button>
+              ))}
+            </div>
+          </div>
+          {(selectedPharmacyType === "Prescription Refill" || selectedPharmacyType === "New Prescription Pickup") && (
+            <div className="bg-warning/10 border border-warning/20 rounded-xl p-3">
+              <p className="text-xs font-semibold text-foreground mb-1">📋 Prescription Details</p>
+              <Textarea value={pharmacyPrescription} onChange={(e) => setPharmacyPrescription(e.target.value)} placeholder="List the medications on your prescription..." className="mt-1" rows={2} />
+              <p className="text-xs text-muted-foreground mt-1">Please bring your prescription slip when you arrive.</p>
+            </div>
+          )}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Additional Notes (optional)</label>
+            <Textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} placeholder="Any allergies, concerns, or questions..." className="mt-1" rows={2} />
+          </div>
+        </>
+      );
+    }
+
+    // General Consultation (default)
+    return (
+      <div>
+        <label className="text-xs font-medium text-muted-foreground">Symptoms / Complaint *</label>
+        <Textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} placeholder="Describe your symptoms..." className="mt-1" rows={3} />
+      </div>
+    );
+  };
+
+  const canSubmitDetails = (): boolean => {
+    if (isEmergency) return true; // All fields optional for emergencies
+    if (isLabService) return !!selectedSampleType;
+    if (isDentalService) return !!selectedDentalType;
+    if (isOptometryService) return !!selectedOptometryType;
+    if (isPharmacyService) return !!selectedPharmacyType;
+    return !!complaint.trim();
   };
 
   // Home view
@@ -294,6 +503,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         <p className="text-sm text-muted-foreground">{formatDate(a.date)} • {a.timeSlot}</p>
                         <p className="text-xs text-muted-foreground mt-1">ID: {a.id}</p>
                         <p className="text-xs text-primary mt-1">Attending: {a.assignedAdminName}</p>
+                        {a.complaint && <p className="text-xs text-muted-foreground mt-1">Details: {a.complaint}</p>}
                         {a.isEmergency && (
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-emergency mt-1">
                             <AlertTriangle className="w-3 h-3" /> Emergency
@@ -358,7 +568,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
 
-          {/* Date navigator */}
           <div className="flex items-center justify-between mb-4">
             <Button variant="ghost" size="icon" onClick={() => shiftQueueDate(-1)}>
               <ArrowLeft className="w-5 h-5" />
@@ -415,15 +624,27 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   }
 
   // Booking flow
+  const currentSteps = isEmergency ? EMERGENCY_STEPS : STEPS;
+
   return (
     <div className="min-h-screen bg-background">
       <Header user={user} onLogout={onLogout} />
       <div className="container mx-auto px-4 py-6 max-w-2xl animate-fade-in">
-        <Button variant="ghost" onClick={() => (step > 0 && step < 4 ? setStep(step - 1) : (resetBooking(), setView("home")))} className="mb-4">
+        <Button variant="ghost" onClick={() => {
+          if (step > 0 && step < 4) {
+            // For emergency, skip time step (step 2) when going back from triage/details
+            if (isEmergency && step === 3) setStep(2);
+            else if (isEmergency && step === 2) setStep(1);
+            else setStep(step - 1);
+          } else {
+            resetBooking();
+            setView("home");
+          }
+        }} className="mb-4">
           <ArrowLeft className="w-4 h-4 mr-2" /> {step > 0 && step < 4 ? "Back" : "Home"}
         </Button>
 
-        <StepIndicator steps={STEPS} currentStep={step} />
+        <StepIndicator steps={currentSteps} currentStep={step} />
 
         {/* Step 0: Service */}
         {step === 0 && (
@@ -480,8 +701,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </div>
         )}
 
-        {/* Step 2: Time */}
-        {step === 2 && (
+        {/* Step 2: Time (regular) OR Triage (emergency) */}
+        {step === 2 && !isEmergency && (
           <div className="space-y-4 animate-fade-in">
             <h2 className="text-lg font-bold text-foreground">Pick a Date & Time</h2>
 
@@ -549,6 +770,67 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </div>
         )}
 
+        {/* Step 2: Emergency Triage */}
+        {step === 2 && isEmergency && (
+          <div className="space-y-4 animate-fade-in">
+            <div className="bg-emergency/10 border border-emergency/20 rounded-xl p-4">
+              <h2 className="text-lg font-bold text-emergency flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5" /> Emergency Triage
+              </h2>
+              <p className="text-xs text-muted-foreground mt-1">
+                All fields are optional. Fill in what you can — even if you can't complete this form, please come to the clinic immediately.
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">What type of emergency? (select all that apply)</label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {emergencyTypes.map((et) => (
+                  <button
+                    key={et}
+                    onClick={() => toggleEmergencyType(et)}
+                    className={cn(
+                      "py-2 px-3 rounded-lg text-sm font-medium border transition-all text-left",
+                      selectedEmergencyTypes.includes(et)
+                        ? "bg-emergency/10 text-emergency border-emergency/30"
+                        : "bg-card text-foreground border-border hover:border-emergency/30"
+                    )}
+                  >
+                    {et}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Current Body Temperature (°C) — if known</label>
+              <Input
+                type="number"
+                step="0.1"
+                value={emergencyTemperature}
+                onChange={(e) => setEmergencyTemperature(e.target.value)}
+                placeholder="e.g. 38.5"
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Describe what happened (optional)</label>
+              <Textarea
+                value={emergencyDescription}
+                onChange={(e) => setEmergencyDescription(e.target.value)}
+                placeholder="Briefly describe the situation, if you can..."
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+
+            <Button className="w-full gradient-primary hover:opacity-90" onClick={() => setStep(3)}>
+              Continue <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        )}
+
         {/* Step 3: Details */}
         {step === 3 && (
           <div className="space-y-4 animate-fade-in">
@@ -570,51 +852,19 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <Input value={selectedService} disabled className="mt-1 bg-muted/50" />
                 </div>
 
-                {/* Lab-specific: sample type selection */}
-                {isLabService ? (
-                  <>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground">Sample Type *</label>
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        {labSampleTypes.map((st) => (
-                          <button
-                            key={st}
-                            onClick={() => setSelectedSampleType(st)}
-                            className={cn(
-                              "py-2 px-3 rounded-lg text-sm font-medium border transition-all",
-                              selectedSampleType === st
-                                ? "gradient-primary text-primary-foreground border-transparent"
-                                : "bg-card text-foreground border-border hover:border-primary"
-                            )}
-                          >
-                            {st}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground">Additional Notes (optional)</label>
-                      <Textarea
-                        value={complaint}
-                        onChange={(e) => setComplaint(e.target.value)}
-                        placeholder="Any specific tests or information..."
-                        className="mt-1"
-                        rows={2}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">Symptoms / Complaint *</label>
-                    <Textarea
-                      value={complaint}
-                      onChange={(e) => setComplaint(e.target.value)}
-                      placeholder="Describe your symptoms..."
-                      className="mt-1"
-                      rows={3}
-                    />
+                {isEmergency && (
+                  <div className="bg-emergency/10 border border-emergency/20 rounded-xl p-3">
+                    <p className="text-xs font-semibold text-emergency">🚨 Emergency — You will be seen as soon as possible</p>
+                    {selectedEmergencyTypes.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">Type: {selectedEmergencyTypes.join(", ")}</p>
+                    )}
+                    {emergencyTemperature && (
+                      <p className="text-xs text-muted-foreground">Temperature: {emergencyTemperature}°C</p>
+                    )}
                   </div>
                 )}
+
+                {renderServiceSpecificFields()}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -628,10 +878,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </div>
                 <Button
                   className="w-full gradient-primary hover:opacity-90"
-                  disabled={isLabService ? !selectedSampleType : !complaint.trim()}
+                  disabled={!canSubmitDetails()}
                   onClick={handleBook}
                 >
-                  Confirm Booking
+                  {isEmergency ? "Submit Emergency Request" : "Confirm Booking"}
                 </Button>
               </CardContent>
             </Card>
@@ -645,9 +895,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
               <CheckCircle2 className="w-8 h-8 text-success" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-foreground">Appointment Confirmed!</h2>
+              <h2 className="text-xl font-bold text-foreground">
+                {isEmergency ? "Emergency Request Submitted!" : "Appointment Confirmed!"}
+              </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Appointment confirmed for {confirmedAppointment.timeSlot}
+                {isEmergency
+                  ? "Please proceed to the clinic immediately. Staff have been notified."
+                  : `Appointment confirmed for ${confirmedAppointment.timeSlot}`}
               </p>
             </div>
 
@@ -663,11 +917,19 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 {confirmedAppointment.isEmergency && (
                   <div className="flex justify-between"><span className="text-sm text-muted-foreground">Priority</span><span className="text-sm font-semibold text-emergency">🚨 Emergency</span></div>
                 )}
+                {confirmedAppointment.complaint && (
+                  <div className="pt-2 border-t border-border">
+                    <span className="text-xs text-muted-foreground">Details:</span>
+                    <p className="text-sm text-foreground mt-1">{confirmedAppointment.complaint}</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             <div className="bg-warning/10 border border-warning/20 rounded-xl p-4">
-              <p className="text-sm font-semibold text-foreground">📋 Please arrive 30 minutes early</p>
+              <p className="text-sm font-semibold text-foreground">
+                {isEmergency ? "🚨 Please proceed to the clinic immediately" : "📋 Please arrive 30 minutes early"}
+              </p>
               <p className="text-xs text-muted-foreground mt-1">Bring your student ID card</p>
             </div>
 
