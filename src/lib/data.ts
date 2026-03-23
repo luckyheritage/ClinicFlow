@@ -100,6 +100,49 @@ export const labSampleTypes = [
   "Other",
 ] as const;
 
+export const dentalVisitTypes = [
+  "Routine Checkup",
+  "Toothache / Pain",
+  "Braces Fitting",
+  "Tooth Extraction",
+  "Teeth Cleaning",
+  "Gum Disease",
+  "Other",
+] as const;
+
+export const optometryVisitTypes = [
+  "Eye Examination",
+  "New Glasses Fitting",
+  "Contact Lens Fitting",
+  "Eye Infection / Irritation",
+  "Follow-up Visit",
+  "Other",
+] as const;
+
+export const pharmacyVisitTypes = [
+  "Prescription Refill",
+  "New Prescription Pickup",
+  "Over-the-Counter Medication",
+  "Drug Consultation",
+  "Other",
+] as const;
+
+export const emergencyTypes = [
+  "Accident / Injury",
+  "Severe Allergic Reaction",
+  "Fracture / Broken Bone",
+  "High Fever",
+  "Difficulty Breathing",
+  "Chest Pain",
+  "Severe Bleeding",
+  "Loss of Consciousness",
+  "Seizure / Convulsion",
+  "Severe Abdominal Pain",
+  "Burns",
+  "Poisoning / Overdose",
+  "Other",
+] as const;
+
 export const adminRoleLabels: Record<AdminRole, string> = {
   doctor: "Doctor",
   nurse: "Nurse",

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { AuthUser } from "@/lib/auth";
 import {
   getStoredAppointments, saveAppointments, generateTimeSlots, formatDate,
-  addNotification, adminRoleLabels,
+  addNotification, adminRoleLabels, Appointment,
 } from "@/lib/data";
 import Header from "./Header";
 import { Button } from "@/components/ui/button";
@@ -12,19 +12,19 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import {
   AlertTriangle, Calendar, Clock, Users, ArrowUpDown, ChevronLeft, ChevronRight,
-  Search, CheckCircle2,
+  Search, CheckCircle2, X, FileText,
 } from "lucide-react";
 
 const AdminDashboard: React.FC<{ user: AuthUser; onLogout: () => void }> = ({ user, onLogout }) => {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<ReturnType<typeof getStoredAppointments> | null>(null);
+  const [expandedApptId, setExpandedApptId] = useState<string | null>(null);
   const appointments = getStoredAppointments();
   const timeSlots = generateTimeSlots();
 
   const isReceptionist = user.adminRole === "receptionist";
 
-  // Filter appointments: receptionist sees all, others see only their assigned patients
   const dayAppts = useMemo(() => {
     const filtered = appointments.filter((a) => a.date === selectedDate && a.status === "confirmed");
     if (isReceptionist) return filtered;
@@ -42,17 +42,11 @@ const AdminDashboard: React.FC<{ user: AuthUser; onLogout: () => void }> = ({ us
   };
 
   const handleSearch = () => {
-    if (!searchQuery.trim()) {
-      setSearchResults(null);
-      return;
-    }
+    if (!searchQuery.trim()) { setSearchResults(null); return; }
     const q = searchQuery.trim().toLowerCase();
     const results = appointments.filter(
-      (a) =>
-        a.status === "confirmed" &&
-        (a.studentName.toLowerCase().includes(q) ||
-          a.studentId.toLowerCase().includes(q) ||
-          a.id.toLowerCase().includes(q))
+      (a) => a.status === "confirmed" &&
+        (a.studentName.toLowerCase().includes(q) || a.studentId.toLowerCase().includes(q) || a.id.toLowerCase().includes(q))
     );
     setSearchResults(results);
   };
@@ -60,15 +54,10 @@ const AdminDashboard: React.FC<{ user: AuthUser; onLogout: () => void }> = ({ us
   const moveToEarliest = (apptId: string) => {
     const appt = appointments.find((a) => a.id === apptId);
     if (!appt) return;
-
     const bookedSlots = dayAppts.filter((a) => a.assignedAdminId === appt.assignedAdminId).map((a) => a.timeSlot);
     const earliest = timeSlots.find((s) => !bookedSlots.includes(s) || s === appt.timeSlot);
-
     if (earliest && earliest !== appt.timeSlot) {
-      const updated = appointments.map((a) => {
-        if (a.id === apptId) return { ...a, timeSlot: earliest };
-        return a;
-      });
+      const updated = appointments.map((a) => a.id === apptId ? { ...a, timeSlot: earliest } : a);
       saveAppointments(updated);
       addNotification(appt.studentId, `Your appointment has been adjusted due to an emergency. New time: ${earliest}`, "rescheduled");
       addNotification(user.id, `Moved ${appt.studentName} to ${earliest}`, "rescheduled");
@@ -77,6 +66,33 @@ const AdminDashboard: React.FC<{ user: AuthUser; onLogout: () => void }> = ({ us
   };
 
   const roleLabel = user.adminRole ? adminRoleLabels[user.adminRole] : "Admin";
+
+  const renderPatientDetail = (a: Appointment) => (
+    <div className="mt-3 pt-3 border-t border-border space-y-2 animate-fade-in">
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div><span className="text-muted-foreground">Booking ID:</span> <strong className="text-foreground">{a.id}</strong></div>
+        <div><span className="text-muted-foreground">Matriculation No:</span> <strong className="text-foreground">{a.studentId}</strong></div>
+        <div><span className="text-muted-foreground">Service:</span> <strong className="text-foreground">{a.service}</strong></div>
+        <div><span className="text-muted-foreground">Date:</span> <strong className="text-foreground">{formatDate(a.date)}</strong></div>
+        <div><span className="text-muted-foreground">Time:</span> <strong className="text-foreground">{a.timeSlot}</strong></div>
+        <div><span className="text-muted-foreground">Clinician:</span> <strong className="text-primary">{a.assignedAdminName}</strong></div>
+        {a.phone && <div><span className="text-muted-foreground">Phone:</span> <strong className="text-foreground">{a.phone}</strong></div>}
+        {a.email && <div><span className="text-muted-foreground">Email:</span> <strong className="text-foreground">{a.email}</strong></div>}
+      </div>
+      {a.complaint && (
+        <div className="bg-muted/50 rounded-lg p-2">
+          <p className="text-xs text-muted-foreground mb-1 font-semibold">Visit Details / Complaint:</p>
+          <p className="text-sm text-foreground">{a.complaint}</p>
+        </div>
+      )}
+      {a.isEmergency && (
+        <div className="bg-emergency/10 border border-emergency/20 rounded-lg p-2">
+          <p className="text-xs font-semibold text-emergency">🚨 Emergency Case</p>
+          <p className="text-xs text-muted-foreground mt-1">{a.complaint}</p>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -110,11 +126,17 @@ const AdminDashboard: React.FC<{ user: AuthUser; onLogout: () => void }> = ({ us
                     <p className="text-sm text-muted-foreground">No matching appointments found.</p>
                   ) : (
                     searchResults.map((a) => (
-                      <div key={a.id} className="p-3 rounded-xl bg-success/5 border border-success/20">
+                      <div
+                        key={a.id}
+                        className="p-3 rounded-xl bg-success/5 border border-success/20 cursor-pointer hover:bg-success/10 transition-colors"
+                        onClick={() => setExpandedApptId(expandedApptId === a.id ? null : a.id)}
+                      >
                         <div className="flex items-center gap-2 mb-1">
                           <CheckCircle2 className="w-4 h-4 text-success" />
                           <span className="font-semibold text-foreground text-sm">{a.studentName}</span>
                           <span className="text-xs text-muted-foreground">({a.studentId})</span>
+                          {a.isEmergency && <span className="text-xs text-emergency font-semibold">🚨</span>}
+                          <FileText className="w-3 h-3 text-muted-foreground ml-auto" />
                         </div>
                         <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
                           <span>Booking ID: <strong className="text-foreground">{a.id}</strong></span>
@@ -123,9 +145,7 @@ const AdminDashboard: React.FC<{ user: AuthUser; onLogout: () => void }> = ({ us
                           <span>Date: <strong className="text-foreground">{formatDate(a.date)}</strong></span>
                           <span className="col-span-2">Attending: <strong className="text-primary">{a.assignedAdminName}</strong></span>
                         </div>
-                        {a.isEmergency && (
-                          <span className="text-xs text-emergency font-semibold mt-1 inline-block">🚨 Emergency</span>
-                        )}
+                        {expandedApptId === a.id && renderPatientDetail(a)}
                       </div>
                     ))
                   )}
@@ -189,30 +209,38 @@ const AdminDashboard: React.FC<{ user: AuthUser; onLogout: () => void }> = ({ us
               <div
                 key={appt.id}
                 className={cn(
-                  "flex items-center gap-3 p-3 rounded-xl transition-all",
+                  "p-3 rounded-xl transition-all cursor-pointer",
                   appt.isEmergency
                     ? "bg-emergency/10 border border-emergency/20"
-                    : "bg-card shadow-card border border-border/50"
+                    : "bg-card shadow-card border border-border/50",
+                  expandedApptId === appt.id && "shadow-card-md"
                 )}
+                onClick={() => setExpandedApptId(expandedApptId === appt.id ? null : appt.id)}
               >
-                <span className="text-sm font-mono font-semibold w-20 shrink-0 text-foreground">{slot}</span>
-                <div className="flex-1 flex items-center justify-between min-w-0">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">
-                      {appt.studentName}
-                      {appt.isEmergency && <span className="ml-2 text-emergency">🚨</span>}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {appt.service} • {appt.studentId}
-                      {isReceptionist && ` • ${appt.assignedAdminName}`}
-                    </p>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-mono font-semibold w-20 shrink-0 text-foreground">{slot}</span>
+                  <div className="flex-1 flex items-center justify-between min-w-0">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">
+                        {appt.studentName}
+                        {appt.isEmergency && <span className="ml-2 text-emergency">🚨</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {appt.service} • {appt.studentId}
+                        {isReceptionist && ` • ${appt.assignedAdminName}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      {appt.isEmergency && !isReceptionist && (
+                        <Button size="sm" variant="outline" className="text-xs" onClick={(e) => { e.stopPropagation(); moveToEarliest(appt.id); }}>
+                          <ArrowUpDown className="w-3 h-3 mr-1" /> Prioritize
+                        </Button>
+                      )}
+                      <FileText className="w-4 h-4 text-muted-foreground" />
+                    </div>
                   </div>
-                  {appt.isEmergency && !isReceptionist && (
-                    <Button size="sm" variant="outline" className="shrink-0 ml-2 text-xs" onClick={() => moveToEarliest(appt.id)}>
-                      <ArrowUpDown className="w-3 h-3 mr-1" /> Prioritize
-                    </Button>
-                  )}
                 </div>
+                {expandedApptId === appt.id && renderPatientDetail(appt)}
               </div>
             ));
           })}
