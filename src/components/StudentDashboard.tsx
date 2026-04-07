@@ -139,22 +139,21 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     let bookDate = dateStr;
     let bookSlot = selectedSlot;
 
-    // For emergencies, auto-assign today and earliest slot if not selected
+    // For emergencies, force General Consultation (doctors only)
+    const svc = isEmergency ? "General Consultation" : (selectedService || "General Consultation");
+
     if (isEmergency) {
       if (!bookDate) {
         bookDate = format(new Date(), "yyyy-MM-dd");
       }
       if (!bookSlot) {
-        const svc = selectedService || "General Consultation";
         const fullyBooked = getFullyBookedSlots(svc, bookDate);
         bookSlot = timeSlots.find((s) => !fullyBooked.includes(s)) || timeSlots[0];
       }
     }
 
     if (!isEmergency && bookedSlotsForDate.includes(bookSlot)) return;
-
-    const svc = selectedService || "General Consultation";
-    const clinician = assignClinician(svc, bookDate);
+    const clinician = assignClinician(svc, bookDate, isEmergency);
     const complaintText = buildComplaintText();
 
     const appt: Appointment = {

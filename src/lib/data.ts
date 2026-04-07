@@ -161,8 +161,12 @@ export function getAdminsForService(serviceLabel: string): Admin[] {
 }
 
 /** Auto-assign a clinician: pick the one with fewest bookings for that date+service */
-export function assignClinician(serviceLabel: string, date: string): Admin | null {
-  const eligible = getAdminsForService(serviceLabel);
+export function assignClinician(serviceLabel: string, date: string, isEmergency = false): Admin | null {
+  let eligible = getAdminsForService(serviceLabel);
+  // For emergencies, only doctors can attend
+  if (isEmergency) {
+    eligible = eligible.filter((a) => a.role === "doctor");
+  }
   if (eligible.length === 0) return null;
 
   const appointments = getStoredAppointments();
