@@ -553,7 +553,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   // Queue view
   if (view === "queue") {
     const queueDateStr = format(queueDate, "yyyy-MM-dd");
-    const queueAppts = getStoredAppointments().filter((a) => a.date === queueDateStr && a.status === "confirmed");
+    const queueAppts = getStoredAppointments().filter((a) => a.date === queueDateStr && a.status === "confirmed" && !isAppointmentElapsed(a));
 
     const shiftQueueDate = (days: number) => {
       const d = new Date(queueDate);

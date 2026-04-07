@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { AuthUser } from "@/lib/auth";
 import {
   getStoredAppointments, saveAppointments, generateTimeSlots, formatDate,
-  addNotification, adminRoleLabels, Appointment,
+  addNotification, adminRoleLabels, Appointment, isAppointmentElapsed,
 } from "@/lib/data";
 import Header from "./Header";
 import { Button } from "@/components/ui/button";
