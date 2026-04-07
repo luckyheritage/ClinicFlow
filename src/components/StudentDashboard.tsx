@@ -44,6 +44,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   user, onLogout, preselectedDate, preselectedSlot,
 }) => {
   const [view, setView] = useState<"home" | "book" | "queue" | "myAppointments" | "notifications">("home");
+  const [refreshKey, setRefreshKey] = useState(0);
   const [queueDate, setQueueDate] = useState<Date>(new Date());
   const [step, setStep] = useState(0);
   const [selectedService, setSelectedService] = useState("");
@@ -88,7 +89,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return booked * 5;
   }, [bookedSlotsForDate]);
 
-  const myAppointments = appointments.filter((a) => a.studentId === user.id && a.status === "confirmed");
+  const myAppointments = appointments.filter((a) => a.studentId === user.id && a.status === "confirmed" && !isAppointmentElapsed(a));
 
   const resetBooking = () => {
     setStep(0);
@@ -190,7 +191,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     const updated = appointments.map((a) => (a.id === apptId ? { ...a, status: "cancelled" as const } : a));
     saveAppointments(updated);
     addNotification(user.id, `Your appointment ${apptId} has been cancelled.`, "cancelled");
-    setView("myAppointments");
+    setRefreshKey((k) => k + 1);
   };
 
   const handleBookFromQueue = (date: string, slot: string) => {
