@@ -5,7 +5,7 @@ import {
   saveAppointments, addNotification, services, isWeekday, formatDate,
   getStoredNotifications, saveNotifications, labSampleTypes,
   dentalVisitTypes, optometryVisitTypes, pharmacyVisitTypes, emergencyTypes,
-  assignClinician, getFullyBookedSlots,
+  assignClinician, getFullyBookedSlots, isAppointmentElapsed,
 } from "@/lib/data";
 import StepIndicator from "./StepIndicator";
 import Header from "./Header";
@@ -44,6 +44,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   user, onLogout, preselectedDate, preselectedSlot,
 }) => {
   const [view, setView] = useState<"home" | "book" | "queue" | "myAppointments" | "notifications">("home");
+  const [refreshKey, setRefreshKey] = useState(0);
   const [queueDate, setQueueDate] = useState<Date>(new Date());
   const [step, setStep] = useState(0);
   const [selectedService, setSelectedService] = useState("");
@@ -88,7 +89,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return booked * 5;
   }, [bookedSlotsForDate]);
 
-  const myAppointments = appointments.filter((a) => a.studentId === user.id && a.status === "confirmed");
+  const myAppointments = appointments.filter((a) => a.studentId === user.id && a.status === "confirmed" && !isAppointmentElapsed(a));
 
   const resetBooking = () => {
     setStep(0);
@@ -190,7 +191,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     const updated = appointments.map((a) => (a.id === apptId ? { ...a, status: "cancelled" as const } : a));
     saveAppointments(updated);
     addNotification(user.id, `Your appointment ${apptId} has been cancelled.`, "cancelled");
-    setView("myAppointments");
+    setRefreshKey((k) => k + 1);
   };
 
   const handleBookFromQueue = (date: string, slot: string) => {
@@ -481,7 +482,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   // My Appointments view
   if (view === "myAppointments") {
-    const active = getStoredAppointments().filter((a) => a.studentId === user.id && a.status === "confirmed");
+    const active = getStoredAppointments().filter((a) => a.studentId === user.id && a.status === "confirmed" && !isAppointmentElapsed(a));
     return (
       <div className="min-h-screen bg-background">
         <Header user={user} onLogout={onLogout} />
@@ -552,7 +553,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   // Queue view
   if (view === "queue") {
     const queueDateStr = format(queueDate, "yyyy-MM-dd");
-    const queueAppts = getStoredAppointments().filter((a) => a.date === queueDateStr && a.status === "confirmed");
+    const queueAppts = getStoredAppointments().filter((a) => a.date === queueDateStr && a.status === "confirmed" && !isAppointmentElapsed(a));
 
     const shiftQueueDate = (days: number) => {
       const d = new Date(queueDate);

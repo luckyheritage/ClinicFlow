@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { AuthUser } from "@/lib/auth";
 import {
   getStoredAppointments, saveAppointments, generateTimeSlots, formatDate,
-  addNotification, adminRoleLabels, Appointment,
+  addNotification, adminRoleLabels, Appointment, isAppointmentElapsed,
 } from "@/lib/data";
 import Header from "./Header";
 import { Button } from "@/components/ui/button";
@@ -231,7 +231,7 @@ const AdminDashboard: React.FC<{ user: AuthUser; onLogout: () => void }> = ({ us
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
-                      {appt.isEmergency && !isReceptionist && (
+                      {appt.isEmergency && (
                         <Button size="sm" variant="outline" className="text-xs" onClick={(e) => { e.stopPropagation(); moveToEarliest(appt.id); }}>
                           <ArrowUpDown className="w-3 h-3 mr-1" /> Prioritize
                         </Button>
