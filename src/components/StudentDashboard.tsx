@@ -482,7 +482,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   // My Appointments view
   if (view === "myAppointments") {
-    const active = getStoredAppointments().filter((a) => a.studentId === user.id && a.status === "confirmed");
+    const active = getStoredAppointments().filter((a) => a.studentId === user.id && a.status === "confirmed" && !isAppointmentElapsed(a));
     return (
       <div className="min-h-screen bg-background">
         <Header user={user} onLogout={onLogout} />
