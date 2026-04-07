@@ -153,7 +153,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }
 
     if (!isEmergency && bookedSlotsForDate.includes(bookSlot)) return;
-    const clinician = assignClinician(svc, bookDate);
+    const clinician = assignClinician(svc, bookDate, isEmergency);
     const complaintText = buildComplaintText();
 
     const appt: Appointment = {
