@@ -5,7 +5,7 @@ import {
   saveAppointments, addNotification, services, isWeekday, formatDate,
   getStoredNotifications, saveNotifications, labSampleTypes,
   dentalVisitTypes, optometryVisitTypes, pharmacyVisitTypes, emergencyTypes,
-  assignClinician, getFullyBookedSlots,
+  assignClinician, getFullyBookedSlots, isAppointmentElapsed,
 } from "@/lib/data";
 import StepIndicator from "./StepIndicator";
 import Header from "./Header";

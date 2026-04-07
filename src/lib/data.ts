@@ -279,6 +279,19 @@ export function isWeekday(date: Date): boolean {
   return day >= 1 && day <= 6; // Mon-Sat
 }
 
+/** Check if an appointment's time has elapsed */
+export function isAppointmentElapsed(appt: Appointment): boolean {
+  const now = new Date();
+  const [timePart, ampm] = appt.timeSlot.split(" ");
+  const [hStr, mStr] = timePart.split(":");
+  let hour = parseInt(hStr, 10);
+  if (ampm === "PM" && hour !== 12) hour += 12;
+  if (ampm === "AM" && hour === 12) hour = 0;
+  const apptDate = new Date(appt.date + "T00:00:00");
+  apptDate.setHours(hour, parseInt(mStr, 10) + 20, 0); // +20 min for slot duration
+  return now > apptDate;
+}
+
 export function formatDate(dateStr: string): string {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
     weekday: "long",
