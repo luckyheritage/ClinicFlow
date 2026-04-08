@@ -196,21 +196,38 @@ export function assignClinician(serviceLabel: string, date: string, isEmergency 
 
 /** Check if a specific slot is available for a given admin on a date */
 export function isSlotAvailableForAdmin(adminId: string, date: string, timeSlot: string): boolean {
-  void adminId;
   const appointments = getStoredAppointments();
   return !appointments.some(
-    (a) => a.date === date && a.timeSlot === timeSlot && a.status === "confirmed"
+    (a) => a.date === date && a.timeSlot === timeSlot && a.assignedAdminId === adminId && a.status === "confirmed"
   );
 }
 
-/** Get booked slots for a date (ClinicFlow does not allow double booking across the clinic) */
+/**
+ * Get fully booked slots for a service on a date.
+ * A slot is "fully booked" only when ALL eligible clinicians for that service
+ * already have a patient in that slot.
+ */
 export function getFullyBookedSlots(serviceLabel: string, date: string): string[] {
-  void serviceLabel;
+  const eligible = getAdminsForService(serviceLabel);
+  const clinicianCount = eligible.length;
+  if (clinicianCount === 0) return [];
 
+  const eligibleIds = new Set(eligible.map((a) => a.id));
   const appointments = getStoredAppointments();
-  return appointments
-    .filter((a) => a.date === date && a.status === "confirmed")
-    .map((a) => a.timeSlot);
+  const dayAppts = appointments.filter(
+    (a) => a.date === date && a.status === "confirmed" && eligibleIds.has(a.assignedAdminId)
+  );
+
+  // Count how many eligible clinicians are booked per slot
+  const slotCounts = new Map<string, number>();
+  dayAppts.forEach((a) => {
+    slotCounts.set(a.timeSlot, (slotCounts.get(a.timeSlot) || 0) + 1);
+  });
+
+  // A slot is fully booked when count >= number of eligible clinicians
+  return Array.from(slotCounts.entries())
+    .filter(([, count]) => count >= clinicianCount)
+    .map(([slot]) => slot);
 }
 
 export function generateTimeSlots(): string[] {
