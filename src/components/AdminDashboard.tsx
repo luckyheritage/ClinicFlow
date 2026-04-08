@@ -18,18 +18,43 @@ import {
 const AdminDashboard: React.FC<{ user: AuthUser; onLogout: () => void }> = ({ user, onLogout }) => {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<ReturnType<typeof getStoredAppointments> | null>(null);
+  const [searchResults, setSearchResults] = useState<Appointment[] | null>(null);
   const [expandedApptId, setExpandedApptId] = useState<string | null>(null);
-  const appointments = getStoredAppointments();
+  const [appointments, setAppointments] = useState<Appointment[]>(() => getStoredAppointments());
   const timeSlots = generateTimeSlots();
 
   const isReceptionist = user.adminRole === "receptionist";
+  const activeAppointments = useMemo(
+    () => appointments.filter((a) => a.status === "confirmed" && !isAppointmentElapsed(a)),
+    [appointments]
+  );
+
+  const runSearch = (source: Appointment[], query: string) => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return [];
+
+    return source.filter(
+      (a) =>
+        a.studentName.toLowerCase().includes(normalizedQuery) ||
+        a.studentId.toLowerCase().includes(normalizedQuery) ||
+        a.id.toLowerCase().includes(normalizedQuery)
+    );
+  };
+
+  const persistAppointments = (updated: Appointment[]) => {
+    saveAppointments(updated);
+    setAppointments(updated);
+
+    if (searchResults !== null) {
+      setSearchResults(runSearch(updated.filter((a) => a.status === "confirmed" && !isAppointmentElapsed(a)), searchQuery));
+    }
+  };
 
   const dayAppts = useMemo(() => {
-    const filtered = appointments.filter((a) => a.date === selectedDate && a.status === "confirmed");
+    const filtered = activeAppointments.filter((a) => a.date === selectedDate);
     if (isReceptionist) return filtered;
     return filtered.filter((a) => a.assignedAdminId === user.id);
-  }, [appointments, selectedDate, user.id, isReceptionist]);
+  }, [activeAppointments, selectedDate, user.id, isReceptionist]);
 
   const emergencies = dayAppts.filter((a) => a.isEmergency);
   const totalToday = dayAppts.length;
@@ -43,26 +68,70 @@ const AdminDashboard: React.FC<{ user: AuthUser; onLogout: () => void }> = ({ us
 
   const handleSearch = () => {
     if (!searchQuery.trim()) { setSearchResults(null); return; }
-    const q = searchQuery.trim().toLowerCase();
-    const results = appointments.filter(
-      (a) => a.status === "confirmed" &&
-        (a.studentName.toLowerCase().includes(q) || a.studentId.toLowerCase().includes(q) || a.id.toLowerCase().includes(q))
-    );
-    setSearchResults(results);
+    setSearchResults(runSearch(activeAppointments, searchQuery));
   };
 
   const moveToEarliest = (apptId: string) => {
-    const appt = appointments.find((a) => a.id === apptId);
+    const appt = activeAppointments.find((a) => a.id === apptId && a.isEmergency);
     if (!appt) return;
-    const bookedSlots = dayAppts.filter((a) => a.assignedAdminId === appt.assignedAdminId).map((a) => a.timeSlot);
-    const earliest = timeSlots.find((s) => !bookedSlots.includes(s) || s === appt.timeSlot);
-    if (earliest && earliest !== appt.timeSlot) {
-      const updated = appointments.map((a) => a.id === apptId ? { ...a, timeSlot: earliest } : a);
-      saveAppointments(updated);
-      addNotification(appt.studentId, `Your appointment has been adjusted due to an emergency. New time: ${earliest}`, "rescheduled");
-      addNotification(user.id, `Moved ${appt.studentName} to ${earliest}`, "rescheduled");
-      window.location.reload();
+
+    const currentIndex = timeSlots.indexOf(appt.timeSlot);
+    const sameDayAppointments = activeAppointments
+      .filter((a) => a.date === appt.date)
+      .sort((a, b) => timeSlots.indexOf(a.timeSlot) - timeSlots.indexOf(b.timeSlot));
+
+    const earlierAppointments = sameDayAppointments.filter(
+      (candidate) => candidate.id !== appt.id && timeSlots.indexOf(candidate.timeSlot) < currentIndex
+    );
+
+    if (earlierAppointments.length === 0) {
+      addNotification(appt.studentId, `Your emergency appointment is already at the top of the queue for ${appt.timeSlot} on ${formatDate(appt.date)}.`, "rescheduled");
+      return;
     }
+
+    const targetIndex = Math.min(...earlierAppointments.map((candidate) => timeSlots.indexOf(candidate.timeSlot)));
+    const slotUpdates = new Map<string, string>();
+    let nextSlot = appt.timeSlot;
+
+    for (let index = currentIndex - 1; index >= targetIndex; index -= 1) {
+      const slot = timeSlots[index];
+      const occupyingAppointment = sameDayAppointments.find(
+        (candidate) => candidate.id !== appt.id && candidate.timeSlot === slot
+      );
+
+      if (occupyingAppointment) {
+        slotUpdates.set(occupyingAppointment.id, nextSlot);
+      }
+
+      nextSlot = slot;
+    }
+
+    const prioritizedSlot = timeSlots[targetIndex];
+    slotUpdates.set(appt.id, prioritizedSlot);
+
+    const updatedAppointments = appointments.map((appointment) => {
+      const nextTimeSlot = slotUpdates.get(appointment.id);
+      return nextTimeSlot ? { ...appointment, timeSlot: nextTimeSlot } : appointment;
+    });
+
+    persistAppointments(updatedAppointments);
+
+    earlierAppointments.forEach((shiftedAppointment) => {
+      const rescheduledSlot = slotUpdates.get(shiftedAppointment.id);
+      if (!rescheduledSlot || rescheduledSlot === shiftedAppointment.timeSlot) return;
+
+      addNotification(
+        shiftedAppointment.studentId,
+        `Your appointment on ${formatDate(shiftedAppointment.date)} has been rescheduled to ${rescheduledSlot} because an emergency patient was prioritized ahead of you.`,
+        "rescheduled"
+      );
+    });
+
+    addNotification(
+      appt.studentId,
+      `Your emergency appointment has been prioritized. New time: ${prioritizedSlot} on ${formatDate(appt.date)}.`,
+      "rescheduled"
+    );
   };
 
   const roleLabel = user.adminRole ? adminRoleLabels[user.adminRole] : "Admin";
