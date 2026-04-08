@@ -147,12 +147,17 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
         bookDate = format(new Date(), "yyyy-MM-dd");
       }
       if (!bookSlot) {
-        const fullyBooked = getFullyBookedSlots(svc, bookDate);
-        bookSlot = timeSlots.find((s) => !fullyBooked.includes(s)) || timeSlots[0];
+        const unavailableSlots = getFullyBookedSlots(svc, bookDate);
+        bookSlot = timeSlots.find((s) => !unavailableSlots.includes(s)) || "";
       }
     }
 
-    if (!isEmergency && bookedSlotsForDate.includes(bookSlot)) return;
+    const unavailableSlots = getFullyBookedSlots(svc, bookDate);
+    if (!bookDate || !bookSlot || unavailableSlots.includes(bookSlot)) {
+      window.alert("That time slot is no longer available. Please choose the next available slot.");
+      return;
+    }
+
     const clinician = assignClinician(svc, bookDate, isEmergency);
     const complaintText = buildComplaintText();
 
